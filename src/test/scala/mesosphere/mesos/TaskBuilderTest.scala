@@ -7,14 +7,11 @@ import mesosphere.marathon.state.Container.Docker
 import mesosphere.marathon.state.Container.Docker.PortMapping
 import mesosphere.marathon.state.PathId._
 import mesosphere.marathon.state.{ AppDefinition, Container, PathId, Timestamp }
-import mesosphere.marathon.tasks.{ MarathonTasks, TaskTracker }
+import mesosphere.marathon.tasks.MarathonTasks
 import mesosphere.mesos.protos.{ Resource, TaskID, _ }
 import org.apache.mesos.Protos.ContainerInfo.DockerInfo.Network
 import org.apache.mesos.Protos.{ Offer, _ }
 import org.joda.time.{ DateTime, DateTimeZone }
-import org.mockito.Mockito._
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
@@ -405,8 +402,6 @@ class TaskBuilderTest extends MarathonSpec {
   }
 
   test("BuildIfMatchesWithRackIdConstraint") {
-    val taskTracker = mock[TaskTracker]
-
     val offer = makeBasicOffer(1.0, 128.0, 31000, 32000)
       .addAttributes(TextAttribute("rackid", "1"))
       .build
@@ -424,12 +419,10 @@ class TaskBuilderTest extends MarathonSpec {
     val t2 = makeSampleTask(app.id, "rackid", "3")
     val s = Set(t1, t2)
 
-    when(taskTracker.getTasks(app.id)).thenReturn(s)
-
     val builder = new TaskBuilder(app,
       s => TaskID(s.toString), defaultConfig())
 
-    val task = builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+    val task = builder.buildIfMatches(offer, s)
 
     assert(task.isDefined)
     // TODO test for resources etc.
@@ -447,16 +440,12 @@ class TaskBuilderTest extends MarathonSpec {
     )
 
     var runningTasks = Set.empty[MarathonTask]
-    val taskTracker = mock[TaskTracker]
-    when(taskTracker.getTasks(app.id)).thenAnswer(new Answer[Set[MarathonTask]] {
-      override def answer(p1: InvocationOnMock): Set[MarathonTask] = runningTasks
-    })
 
     val builder = new TaskBuilder(app,
       s => TaskID(s.toString), defaultConfig())
 
     def shouldBuildTask(message: String, offer: Offer) {
-      val tupleOption = builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+      val tupleOption = builder.buildIfMatches(offer, runningTasks)
       assert(tupleOption.isDefined, message)
       val marathonTask = MarathonTasks.makeTask(
         id = tupleOption.get._1.getTaskId.getValue,
@@ -470,7 +459,7 @@ class TaskBuilderTest extends MarathonSpec {
     }
 
     def shouldNotBuildTask(message: String, offer: Offer) {
-      val tupleOption = builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+      val tupleOption = builder.buildIfMatches(offer, runningTasks)
       assert(tupleOption.isEmpty, message)
     }
 
@@ -510,16 +499,12 @@ class TaskBuilderTest extends MarathonSpec {
     )
 
     var runningTasks = Set.empty[MarathonTask]
-    val taskTracker = mock[TaskTracker]
-    when(taskTracker.getTasks(app.id)).thenAnswer(new Answer[Set[MarathonTask]] {
-      override def answer(p1: InvocationOnMock): Set[MarathonTask] = runningTasks
-    })
 
     val builder = new TaskBuilder(app,
       s => TaskID(s.toString), defaultConfig())
 
     def shouldBuildTask(message: String, offer: Offer) {
-      val tupleOption = builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+      val tupleOption = builder.buildIfMatches(offer, runningTasks)
       assert(tupleOption.isDefined, message)
       val marathonTask = MarathonTasks.makeTask(
         id = tupleOption.get._1.getTaskId.getValue,
@@ -533,7 +518,7 @@ class TaskBuilderTest extends MarathonSpec {
     }
 
     def shouldNotBuildTask(message: String, offer: Offer) {
-      val tupleOption = builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+      val tupleOption = builder.buildIfMatches(offer, runningTasks)
       assert(tupleOption.isEmpty, message)
     }
 
@@ -892,8 +877,6 @@ class TaskBuilderTest extends MarathonSpec {
     mesosRole: Option[String] = None,
     acceptedResourceRoles: Option[Set[String]] = None,
     envVarsPrefix: Option[String] = None) = {
-    val taskTracker = mock[TaskTracker]
-
     val builder = new TaskBuilder(app,
       s => TaskID(s.toString),
       defaultConfig(
@@ -901,7 +884,7 @@ class TaskBuilderTest extends MarathonSpec {
         acceptedResourceRoles = acceptedResourceRoles,
         envVarsPrefix = envVarsPrefix))
 
-    builder.buildIfMatches(offer, taskTracker.getTasks(app.id))
+    builder.buildIfMatches(offer, Iterable.empty)
   }
 
   def makeSampleTask(id: PathId, attr: String, attrVal: String) = {
